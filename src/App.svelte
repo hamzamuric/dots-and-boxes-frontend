@@ -134,14 +134,15 @@
 	}
 </script>
 
-<h1 style="color: {player === 1 ? '#0050b3' : '#f5222d'};">
-	{player === 1 ? 'Player 1' : 'Player 2'}
-</h1>
-<div class="score">
-	<span class="score1">{blueBoxes}</span> | <span class="score2">{redBoxes}</span>
-</div>
-
 <div class="game-container">
+	<div class="score-container">
+		<h1 style="color: {player === 1 ? '#0050b3' : '#f5222d'};">
+			{player === 1 ? 'Player 1' : 'Player 2'}
+		</h1>
+		<div class="score">
+			<span class="score1">{blueBoxes}</span> | <span class="score2">{redBoxes}</span>
+		</div>
+	</div>
 	<div class="controls">
 		{#if false}
 		<label>
@@ -253,15 +254,34 @@
 		padding: 0;
 	}
 	.game-container {
-		display: flex;
+		/* display: flex;
 		flex-direction: column;
 		justify-content: space-evenly;
 		align-items: center;
 		max-width: 600px;
-		margin: 0 auto;
+		margin: 0 auto; */
+		padding: 20px;
+		display: grid;
+		row-gap: 20px;
+		column-gap: 20px;
+		grid-template-columns: 1fr 1fr;
+		grid-template-areas:
+			"game score"
+			"game controlls"
+			"game .";
+	}
+	@media only screen and (max-width: 600px) {
+		.game-container {
+			grid-template-columns: 1fr;
+			grid-template-areas:
+				"score"
+				"controlls"
+				"game";
+		}
 	}
 	.svg-container {
 		width: 100%;
+		grid-area: game;
 	}
 	svg {
 		background-color: white;
@@ -288,6 +308,7 @@
 		box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
 		padding: 10px;
 		box-sizing: border-box;
+		grid-area: controlls;
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 	}
@@ -307,6 +328,9 @@
 	h1 {
 		margin: 20px auto;
 		text-align: center;
+	}
+	.score-container {
+		grid-area: score;
 	}
 	.score {
 		text-align: center;
