@@ -53,7 +53,7 @@
 	<h1>{winner} WON!</h1>
 	<hr>
 	<div class="buttons">
-		<button on:click={reset}>Reset</button>
+		<!-- <button on:click={reset}>Reset</button> -->
 		<button on:click={close}>Close</button>
 	</div>
 </div>

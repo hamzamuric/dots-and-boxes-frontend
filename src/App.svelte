@@ -1,3 +1,7 @@
+<svelte:head>
+	<meta property="og:image" content="http://azer.io/assets/imgs/dotlinkapp-logo.png" />
+</svelte:head>
+
 <script>
 	import { onMount, tick } from 'svelte';
 	import { fade, draw, fly } from 'svelte/transition';
@@ -26,6 +30,8 @@
 	let player = 1;
 
 	let difficulty = 0; // 0 = easy, 1 = medium, 2 = hard
+
+	let clickEnabled = true;
 	
 	$: spaceBetween = 100 / Math.max(dotsHorizontalCount, dotsVerticalCount);
 	$: offset = (100 - (Math.max(dotsHorizontalCount, dotsVerticalCount) - 1) * spaceBetween) / 2;
@@ -40,7 +46,8 @@
 	$: dotsVertical = Array(dotsVerticalCount).fill().map((_, i) => i);
 
 	$: boxes = Array(dotsVerticalCount - 1).fill().map(() => Array(dotsHorizontalCount - 1).fill(0));
-	// $: console.log(boxes);
+	$: blueBoxes = boxes.flat().filter(b => b == 1).length;
+	$: redBoxes = boxes.flat().filter(b => b == -1).length;
 
 	$: win = ![...horizontalLines.flatMap(x => x), ...verticalLines.flatMap(x => x)].some(x => x === 0);
 
@@ -79,26 +86,27 @@
 			verticalLines,
 		};
 		try {
+			clickEnabled = false;
 			const response = await axios.post('/ai/', data);
+			clickEnabled = true;
 			console.log('RESPONSE', response.data);
 			if (!response.data.error) {
 				const { side, i, j } = response.data;
 				if (side === 0) {
-					// horizontalLines[i][j] = -1;
 					handleHorizontalLineClick(i, j);
 				} else {
-					// verticalLines[i][j] = -1;
 					handleVerticalLineClick(i, j);
 				}
 			}
 		} catch (e) {
 			console.log('ERRORRRRRRRR');
 			console.log(Object.keys(e), e.response);
+			clickEnabled = true;
 		}
 	}
 
 	function handleHorizontalLineClick(row, col) {
-		// console.log('horizontal', row, col)
+		if (!clickEnabled) return;
 		if (horizontalLines[row][col] !== 0) return;
 		horizontalLines[row][col] = player;
 		fillBoxes();
@@ -106,7 +114,7 @@
 	}
 	
 	function handleVerticalLineClick(row, col) {
-		// console.log('vertical', row, col)
+		if (!clickEnabled) return;
 		if (verticalLines[row][col] !== 0) return;
 		verticalLines[row][col] = player;
 		fillBoxes();
@@ -114,14 +122,15 @@
 	}
 
 	function resetGame() {
+		boxes = boxes.map(list => list.map(() => 0));
 		linesVisible = false;
 		setTimeout(() => {
 			horizontalLines = horizontalLines.map(lines => lines.map(() => 0));
 			verticalLines = verticalLines.map(lines => lines.map(() => 0));
-			boxes = boxes.map(list => list.map(() => 0));
 			player = 1;
 			linesVisible = true;
-		}, 500);
+			clickEnabled = true;
+		}, 800);
 	}
 </script>
 
@@ -129,15 +138,49 @@
 	{player === 1 ? 'Player 1' : 'Player 2'}
 </h1>
 <div class="score">
-	<span class="score1">0</span> | <span class="score2">0</span>
+	<span class="score1">{blueBoxes}</span> | <span class="score2">{redBoxes}</span>
 </div>
 
 <div class="game-container">
+	<div class="controls">
+		{#if false}
+		<label>
+			<p>circle radius</p>
+			<input type=range min=0.1 max=5 bind:value={radius} />
+		</label>
+		
+		<label>
+			<p>line width</p>
+			<input type=range min=0.1 max=5 bind:value={lineWidth} />
+		</label>
+		{/if}
+		<label>
+			<p>width</p>
+			<input type="number" bind:value={dotsHorizontalCount} />
+		</label>
+		
+		<label>
+			<p>height</p>
+			<input type="number" bind:value={dotsVerticalCount} />
+		</label>
+		<button on:click={resetGame}>Reset game</button>
+		<select bind:value="{difficulty}">
+			<option value="{0}">Easy</option>
+			<option value="{1}">Medium</option>
+			<option value="{2}">Hard</option>
+		</select>
+	</div>
+
 	<div class="svg-container">	
 		<svg viewBox='0 0 100 100'>
 			{#each boxes as row, j}
 				{#each row as box, i}
-					<rect x={i * spaceBetween + offset} y={j * spaceBetween + offset} width={spaceBetween} height={spaceBetween} class:rect1={box === 1} class:rect2={box === -1} />
+					{#if box != 0}
+						<rect 
+							in:fade
+							out:fade="{{duration: 300, delay: 400 - ((i + j) * 100)}}" 
+							x={i * spaceBetween + offset} y={j * spaceBetween + offset} width={spaceBetween} height={spaceBetween} class:rect1={box === 1} class:rect2={box === -1} />
+					{/if}
 				{/each}
 			{/each}
 
@@ -186,29 +229,6 @@
 			{/if}
 		</svg>
 	</div>
-
-	<div class="controls">
-		<label>
-			<p>circle radius</p>
-			<input type=range min=0.1 max=5 bind:value={radius} />
-		</label>
-		
-		<label>
-			<p>line width</p>
-			<input type=range min=0.1 max=5 bind:value={lineWidth} />
-		</label>
-		
-		<label>
-			<p>width</p>
-			<input type="number" bind:value={dotsHorizontalCount} />
-		</label>
-		
-		<label>
-			<p>height</p>
-			<input type="number" bind:value={dotsVerticalCount} />
-		</label>
-		<button on:click={resetGame}>Reset game</button>
-	</div>
 </div>
 
 <footer>
@@ -225,17 +245,23 @@
 
 
 <style>
+	* {
+		margin-top: 10px;
+	}
 	:global(body) {
 		background-color: whitesmoke;
 		padding: 0;
 	}
 	.game-container {
 		display: flex;
+		flex-direction: column;
 		justify-content: space-evenly;
+		align-items: center;
+		max-width: 600px;
+		margin: 0 auto;
 	}
 	.svg-container {
-		max-width: 600px;
-		/* margin: 20px auto; */
+		width: 100%;
 	}
 	svg {
 		background-color: white;
@@ -257,11 +283,10 @@
 	}
 	.controls {
 		background-color: white;
-		max-width: 600px;
-		/* margin: auto auto 20px auto; */
+		width: 100%;
 		border-radius: 10px;
 		box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-		padding: 20px;
+		padding: 10px;
 		box-sizing: border-box;
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -293,9 +318,6 @@
 	}
 	.score2 {
 		color: #f5222d;
-	}
-	rect {
-		fill: transparent;
 	}
 	.rect1 {
 		fill: #40a9ff;
