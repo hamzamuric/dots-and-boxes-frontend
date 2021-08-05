@@ -1,7 +1,8 @@
-import App from './App.svelte';
+import Main from "./Main.svelte";
 
-var app = new App({
-	target: document.body
+var app = new Main({
+	target: document.body,
+	// hydrate: true,
 });
 
 export default app;

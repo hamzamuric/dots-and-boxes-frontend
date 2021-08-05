@@ -1,12 +1,6 @@
 <script>
-    import { createEventDispatcher } from 'svelte';
-
 	export let winner;
-
-    const dispatch = createEventDispatcher();
-	const close = () => dispatch('close');
-	const reset = () => dispatch('reset');
-
+	export let showModal;
 </script>
 
 <style>
@@ -16,16 +10,13 @@
 		left: 0;
 		width: 100%;
 		height: 100%;
-		background: rgba(0,0,0,0.3);
 	}
 
 	.modal {
 		position: absolute;
 		left: 50%;
 		top: 50%;
-		width: calc(100vw - 4em);
-		max-width: 32em;
-		max-height: calc(100vh - 4em);
+		display: inline-block;
 		overflow: auto;
 		transform: translate(-50%,-50%);
 		padding: 1em;
@@ -34,6 +25,7 @@
 	}
 	h1 {
 		text-align: center;
+		display: inline;
 	}
 	hr {
 		width: calc(100% - 8px);
@@ -47,13 +39,23 @@
 	}
 </style>
 
-<div class="modal-background" on:click={close}></div>
+{#if showModal}
+	<div
+		class="modal-background"
+		style="background-color: {winner === 0 ? 'transparent' : winner === 1 ? 'rgba(0, 0, 255, 0.3)' : 'rgba(255, 0, 0, 0.3)'}"
+		on:click={() => {showModal = false}}
+	></div>
 
-<div class="modal" role="dialog" aria-modal="true">
-	<h1>{winner} WON!</h1>
-	<hr>
-	<div class="buttons">
-		<!-- <button on:click={reset}>Reset</button> -->
-		<button on:click={close}>Close</button>
+	<div class="modal" role="dialog" aria-modal="true">
+		<i class="nes-icon trophy is-large"></i>
+		{#if winner === 0}
+			<h1>It's a tie</h1>
+		{:else}
+			<h1>Player {winner === 1 ? 1 : 2} WON!</h1>
+		{/if}
+		<hr>
+		<div class="buttons">
+			<button type="button" class="nes-btn" on:click>Close</button>
+		</div>
 	</div>
-</div>
+{/if}

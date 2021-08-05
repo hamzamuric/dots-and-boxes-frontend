@@ -8,30 +8,65 @@
 	import { spring } from 'svelte/motion';
 	import axios from 'axios';
 	import Modal from './Modal.svelte';
+	import { stringToNumber, numberToString } from './utils';
+
+	export let mode;
+	export let difficulty1;
+	export let difficulty2;
+	export let depth1;
+	export let depth2;
+	export let width;
+	export let height;
+	export let loadedGame;
+	export let onClose;
+
+	const url = '/ai/';
+	// const url = 'http://127.0.0.1:7878/';
 
 	axios.defaults.allowCredentials = true;
 
 	let linesVisible = false;
 
+	let gameSaved = !!localStorage.getItem('saved game');
+
 	onMount(() => {
-		setTimeout(() => {
+		if (loadedGame) {
+			const chosenMode = mode;
+			mode = 0;
+			width = loadedGame.width;
+			height = loadedGame.height;
 			linesVisible = true;
-		}, 1000);
+			for (const m of loadedGame.movesPlayed) {
+				const code = m.code;
+				if (code[0] >= '0' && code[0] <= '9') {
+					handleHorizontalLineClick(+code[0], stringToNumber(code[1]));
+				} else {
+					handleVerticalLineClick(+code[1], stringToNumber(code[0]));
+				}
+			}
+			mode = chosenMode;
+			loadedGame = null;
+		} else {
+			linesVisible = true;
+		}
+		if (mode === 2 /* ai vs ai */) {
+			startAIs();
+		}
 	});
 
-	let radius = 3;
-	let radiusSpring = spring(3);
-	$: radiusSpring.set(linesVisible ? 3 : 0);
-
 	let lineWidth = 2;
+	let radius = 3;
+	let radiusSpring = spring(0);
+	$: radiusSpring.set(linesVisible ? 6 : 0);
+
 	
-	let dotsHorizontalCount = 4;
-	let dotsVerticalCount = 4;
+	let dotsHorizontalCount = width;
+	let dotsVerticalCount = height;
 	let player = 1;
 
-	let difficulty = 0; // 0 = easy, 1 = medium, 2 = hard
-
 	let clickEnabled = true;
+
+	let movesPlayed = [];
 	
 	$: spaceBetween = 100 / Math.max(dotsHorizontalCount, dotsVerticalCount);
 	$: offset = (100 - (Math.max(dotsHorizontalCount, dotsVerticalCount) - 1) * spaceBetween) / 2;
@@ -46,6 +81,7 @@
 	$: dotsVertical = Array(dotsVerticalCount).fill().map((_, i) => i);
 
 	$: boxes = Array(dotsVerticalCount - 1).fill().map(() => Array(dotsHorizontalCount - 1).fill(0));
+	$: console.debug(boxes);
 	$: blueBoxes = boxes.flat().filter(b => b == 1).length;
 	$: redBoxes = boxes.flat().filter(b => b == -1).length;
 
@@ -55,8 +91,8 @@
 	
 	async function fillBoxes() {
 		let filled = false;
-		for (let i = 0; i < dotsHorizontalCount - 1; i++) {
-            for (let j = 0; j < dotsVerticalCount - 1; j++) {
+		for (let i = 0; i < dotsVerticalCount - 1; i++) {
+            for (let j = 0; j < dotsHorizontalCount - 1; j++) {
                 if(boxes[i][j] === 0) {
                     if((horizontalLines[i][j] != 0) && (horizontalLines[i + 1][j] != 0) && (verticalLines[j][i] != 0) && (verticalLines[j + 1][i] != 0)) {
 						await tick();
@@ -79,15 +115,17 @@
 	}
 
 	async function sendToServer() {
-		if (player === 1) return;
+		if (mode === 0) return;
+		if (player === 1 && mode === 1) return;
 		const data = {
-			difficulty,
 			horizontalLines,
 			verticalLines,
+			difficulty: player === 1 ? difficulty1 : difficulty2,
+			depth: player === 1 ? depth1 : depth2,
 		};
 		try {
 			clickEnabled = false;
-			const response = await axios.post('/ai/', data);
+			const response = await axios.post(url, data);
 			clickEnabled = true;
 			console.log('RESPONSE', response.data);
 			if (!response.data.error) {
@@ -109,20 +147,27 @@
 		if (!clickEnabled) return;
 		if (horizontalLines[row][col] !== 0) return;
 		horizontalLines[row][col] = player;
+		movesPlayed = [...movesPlayed, { player, code: `${row}${numberToString(col)}` }];
 		fillBoxes();
-		sendToServer();
+		if (mode > 0) {
+			sendToServer();
+		}
 	}
 	
 	function handleVerticalLineClick(row, col) {
 		if (!clickEnabled) return;
 		if (verticalLines[row][col] !== 0) return;
 		verticalLines[row][col] = player;
+		movesPlayed = [...movesPlayed, { player, code: `${numberToString(col)}${row}` }]
 		fillBoxes();
-		sendToServer();
+		if (mode > 0) {
+			sendToServer();
+		}
 	}
 
 	function resetGame() {
 		boxes = boxes.map(list => list.map(() => 0));
+		movesPlayed = [];
 		linesVisible = false;
 		setTimeout(() => {
 			horizontalLines = horizontalLines.map(lines => lines.map(() => 0));
@@ -131,8 +176,36 @@
 			linesVisible = true;
 			clickEnabled = true;
 		}, 800);
+		if (mode === 2 /* ai vs ai */) {
+			startAIs();
+		}
+	}
+
+	function saveToFile() {
+		const game = {
+			width,
+			height,
+			movesPlayed
+		};
+		localStorage.setItem('saved game', JSON.stringify(game));
+		gameSaved = true;
+	}
+
+	function clearSaved() {
+		localStorage.removeItem('saved game');
+		gameSaved = false;
+	}
+
+	function startAIs() {
+		setTimeout(() => {
+			sendToServer();
+		}, 2000);
 	}
 </script>
+
+<div class="exit" on:click="{onClose}">
+	<i class="nes-icon close is-large nes-pointer"></i>
+</div>
 
 <div class="game-container">
 	<div class="score-container">
@@ -144,35 +217,14 @@
 		</div>
 	</div>
 	<div class="controls">
-		{#if false}
-		<label>
-			<p>circle radius</p>
-			<input type=range min=0.1 max=5 bind:value={radius} />
-		</label>
-		
-		<label>
-			<p>line width</p>
-			<input type=range min=0.1 max=5 bind:value={lineWidth} />
-		</label>
+		<button type="button" class="nes-btn is-warning" on:click={resetGame}>Reset game</button>
+		<button type="button" class="nes-btn is-primary" on:click={saveToFile}>Save game</button>
+		{#if gameSaved}
+			<button type="button" class="nes-btn is-error" on:click={clearSaved}>Clear saved</button>
 		{/if}
-		<label>
-			<p>width</p>
-			<input type="number" bind:value={dotsHorizontalCount} />
-		</label>
-		
-		<label>
-			<p>height</p>
-			<input type="number" bind:value={dotsVerticalCount} />
-		</label>
-		<button on:click={resetGame}>Reset game</button>
-		<select bind:value="{difficulty}">
-			<option value="{0}">Easy</option>
-			<option value="{1}">Medium</option>
-			<option value="{2}">Hard</option>
-		</select>
 	</div>
 
-	<div class="svg-container">	
+	<div class="svg-container nes-container is-rounded">	
 		<svg viewBox='0 0 100 100'>
 			{#each boxes as row, j}
 				{#each row as box, i}
@@ -185,11 +237,6 @@
 				{/each}
 			{/each}
 
-			{#each dotsVertical as row}
-				{#each dotsHorizontal as col}
-					<circle r={$radiusSpring} cx="{spaceBetween * col + offset}" cy="{spaceBetween * row + offset}" />
-				{/each}
-			{/each}
 
 			{#if linesVisible}
 				{#each horizontalLines as lines, row}
@@ -199,6 +246,7 @@
 							out:draw="{{duration: 300}}"
 							style="stroke-width: {lineWidth};"
 							on:click="{() => handleHorizontalLineClick(row, col)}"
+							class="nes-pointer"
 							class:not-selected={horizontalLines[row][col] === 0}
 							class:player1={horizontalLines[row][col] === +1}
 							class:player2={horizontalLines[row][col] === -1}
@@ -217,6 +265,7 @@
 							out:draw="{{duration: 300}}"
 							style="stroke-width: {lineWidth};"
 							on:click="{() => handleVerticalLineClick(row, col)}"
+							class="nes-pointer"
 							class:not-selected={verticalLines[row][col] === 0}
 							class:player1={verticalLines[row][col] === 1}
 							class:player2={verticalLines[row][col] === -1}
@@ -228,19 +277,33 @@
 					{/each}
 				{/each}
 			{/if}
+
+			{#each dotsVertical as row}
+				{#each dotsHorizontal as col}
+					<!-- <circle r={$radiusSpring} cx="{spaceBetween * col + offset}" cy="{spaceBetween * row + offset}" /> -->
+					<rect x="{spaceBetween * col + offset - $radiusSpring / 2}" y="{spaceBetween * row + offset - $radiusSpring / 2}" width="{$radiusSpring}" height="{$radiusSpring}" />
+				{/each}
+			{/each}
 		</svg>
+	</div>
+
+	<div class="moves nes-container with-title is-rounded is-centered">
+		<p class="title">Moves</p>
+		{#each movesPlayed as move}
+			<span
+				in:fly="{{ y: 200, duration: 300 }}"
+				out:fly="{{ y: 200, duration: 800 }}"
+				style="color: { move.player === 1 ? 'blue' : 'red' }">{move.code}</span>
+		{/each}
 	</div>
 </div>
 
-<footer>
-	Hamza Muric - Dots and Boxes
-</footer>
-
 {#if showModal}
 	<Modal 
-		winner={player === 1 ? 'Player 1' : 'Player 2'} 
-		on:close="{() => showModal = false}"
+		winner={blueBoxes == redBoxes ? 0 : blueBoxes > redBoxes ? 1 : -1} 
+		on:click="{() => showModal = false}"
 		on:reset={resetGame}
+		bind:showModal={showModal}
 	/>
 {/if}
 
@@ -253,47 +316,50 @@
 		background-color: whitesmoke;
 		padding: 0;
 	}
+	.exit {
+		position: absolute;
+		top: 10px;
+		right: 30px;
+	}
 	.game-container {
-		/* display: flex;
-		flex-direction: column;
-		justify-content: space-evenly;
-		align-items: center;
-		max-width: 600px;
-		margin: 0 auto; */
 		padding: 20px;
 		display: grid;
 		row-gap: 20px;
 		column-gap: 20px;
 		grid-template-columns: 1fr 1fr;
+		grid-template-rows: min-content min-content 1fr;
 		grid-template-areas:
 			"game score"
 			"game controlls"
-			"game .";
+			"game moves";
 	}
-	@media only screen and (max-width: 600px) {
+	@media only screen and (max-width: 700px) {
 		.game-container {
 			grid-template-columns: 1fr;
 			grid-template-areas:
 				"score"
 				"controlls"
-				"game";
+				"game"
+				"moves";
 		}
+	}
+	.moves {
+		grid-area: moves;
+	}
+	.moves span {
+		margin: 6px;
+		float: left;
+		font-size: 1.5rem;
 	}
 	.svg-container {
 		width: 100%;
 		grid-area: game;
-	}
-	svg {
-		background-color: white;
-		border-radius: 10px;
-		box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
 	}
 	.not-selected {
 		stroke: lightgrey;
 	}
 	.not-selected:hover {
 		stroke: grey;
-		cursor: pointer;
 	}
 	.player1 {
 		stroke: #0050b3;
@@ -302,23 +368,17 @@
 		stroke: #f5222d;
 	}
 	.controls {
-		background-color: white;
 		width: 100%;
-		border-radius: 10px;
-		box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
 		padding: 10px;
 		box-sizing: border-box;
 		grid-area: controlls;
-		display: grid;
-		grid-template-columns: 1fr 1fr;
+		display: flex;
+		gap: 12px;
 	}
-	footer {
-		background-color: lightgrey;
-		color: black;
-		font-weight: bold;
-		font-size: 2em;
-		padding: 20px;
-		text-align: center;
+	.controls * {
+		margin: 4px;
+		font-size: 0.8rem;
+		flex: 1;
 	}
 	@media only screen and (max-width: 600px) {
 		.controls {
